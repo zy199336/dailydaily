@@ -1,0 +1,241 @@
+<view class="page">
+  <view class="topbar">
+    <view>
+      <view class="title">{{title}}</view>
+      <view class="sync">{{syncText}}</view>
+      <view class="account-status" bindtap="openAccountPanel">{{accountText}}</view>
+    </view>
+    <view class="actions">
+      <button class="account-button" bindtap="openAccountPanel">账户</button>
+      <button class="icon-button soft" bindtap="loginAndSync">↻</button>
+      <button class="icon-button" bindtap="openCreateForm">＋</button>
+    </view>
+  </view>
+
+  <view class="controls">
+    <view class="segment">
+      <button class="segment-button {{viewMode == 'month' ? 'active' : ''}}" bindtap="setMonthView">月</button>
+      <button class="segment-button {{viewMode == 'week' ? 'active' : ''}}" bindtap="setWeekView">周</button>
+    </view>
+    <view class="nav">
+      <button class="circle" bindtap="goPrevious">‹</button>
+      <button class="today" bindtap="goToday">今天</button>
+      <button class="circle" bindtap="goNext">›</button>
+    </view>
+  </view>
+
+  <view wx:if="{{viewMode == 'month'}}" class="weekdays">
+    <view>周日</view>
+    <view>周一</view>
+    <view>周二</view>
+    <view>周三</view>
+    <view>周四</view>
+    <view>周五</view>
+    <view>周六</view>
+  </view>
+
+  <view wx:if="{{viewMode == 'month'}}" class="calendar-scroll month">
+    <view class="calendar month">
+      <view
+        wx:for="{{days}}"
+        wx:key="date"
+        class="day {{item.isCurrentMonth ? '' : 'muted'}} {{item.isToday ? 'today-cell' : ''}} {{item.isSelected ? 'selected' : ''}}"
+        data-date="{{item.date}}"
+        bindtap="openDayDetail"
+      >
+        <view class="day-number">{{item.dayLabel}}</view>
+        <view class="task-preview-list">
+          <view
+            wx:for="{{item.visibleTasks}}"
+            wx:for-item="task"
+            wx:key="id"
+            class="task-chip {{task.isCompleted ? 'done' : ''}} {{task.isSpanning ? 'spanning' : ''}}"
+          >
+            <text class="chip-text">{{task.numberLabel}} {{task.title}}</text>
+          </view>
+          <view wx:if="{{item.moreCount > 0}}" class="more">+{{item.moreCount}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="week-list">
+    <view
+      wx:for="{{weekDays}}"
+      wx:key="date"
+      class="week-row {{item.isToday ? 'today-week-row' : ''}} {{item.isSelected ? 'selected-week-row' : ''}}"
+      data-date="{{item.date}}"
+      bindtap="openDayDetail"
+    >
+      <view class="week-label">
+        <view class="week-name">{{item.weekName}}</view>
+        <view class="week-date">{{item.dateLabel}}</view>
+      </view>
+      <view class="week-content">
+        <view wx:if="{{item.visibleTasks.length == 0}}" class="week-empty">无任务</view>
+        <view
+          wx:for="{{item.visibleTasks}}"
+          wx:for-item="task"
+          wx:key="id"
+          class="week-task-chip {{task.isCompleted ? 'done' : ''}} {{task.isSpanning ? 'spanning' : ''}}"
+        >
+          <text class="chip-text">{{task.numberLabel}} {{task.title}}</text>
+        </view>
+        <view wx:if="{{item.moreCount > 0}}" class="more">+{{item.moreCount}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{showDayPanel}}" class="mask" catchtap="closeDayPanel"></view>
+  <view wx:if="{{showDayPanel}}" class="day-panel">
+    <view class="panel-header">
+      <view>
+        <view class="panel-title">{{selectedDate}}</view>
+        <view class="panel-subtitle">当天任务</view>
+      </view>
+      <view class="panel-actions">
+        <button wx:if="{{sortMode}}" class="small-button muted-button" bindtap="exitSortMode">完成排序</button>
+        <button class="small-button" bindtap="openCreateForm">＋ 新增</button>
+        <button class="close" bindtap="closeDayPanel">×</button>
+      </view>
+    </view>
+
+    <scroll-view scroll-y class="task-list">
+      <view wx:if="{{selectedSpanningTasks.length > 0}}" class="section-title">跨日期任务</view>
+      <view
+        wx:for="{{selectedSpanningTasks}}"
+        wx:key="id"
+        class="detail-task spanning-row"
+      >
+        <view class="check" data-id="{{item.id}}" catchtap="toggleCompleted">{{item.isCompleted ? '✓' : ''}}</view>
+        <view class="detail-main" data-id="{{item.id}}" bindtap="openEditForm">
+          <view class="detail-title {{item.isCompleted ? 'done-text' : ''}}">{{item.title}}</view>
+          <view class="detail-meta">{{item.startDate}} 至 {{item.endDate}}</view>
+        </view>
+        <button class="text-button danger" data-id="{{item.id}}" catchtap="confirmDelete">删</button>
+      </view>
+
+      <view class="section-title">当天任务</view>
+      <view wx:if="{{selectedDayTasks.length == 0}}" class="empty">这一天还没有任务</view>
+      <block wx:if="{{!sortMode}}">
+        <view
+          wx:for="{{selectedDayTasks}}"
+          wx:key="id"
+          class="detail-task"
+          bindlongpress="enterSortMode"
+        >
+          <view class="check" data-id="{{item.id}}" catchtap="toggleCompleted">{{item.isCompleted ? '✓' : ''}}</view>
+          <view class="detail-main" data-id="{{item.id}}" bindtap="openEditForm">
+            <view class="detail-title {{item.isCompleted ? 'done-text' : ''}}">{{item.numberLabel}} {{item.title}}</view>
+            <view class="detail-meta">{{item.timeLabel}} · {{item.recurrenceLabel}}</view>
+            <view wx:if="{{item.description}}" class="description">{{item.description}}</view>
+          </view>
+          <button class="text-button danger" data-id="{{item.id}}" catchtap="confirmDelete">删</button>
+        </view>
+      </block>
+
+      <view wx:if="{{sortMode}}" class="sort-area">
+        <view
+          wx:for="{{selectedDayTasks}}"
+          wx:key="id"
+          class="sort-item {{draggingTaskId == item.id ? 'dragging' : ''}}"
+          data-id="{{item.id}}"
+          data-index="{{index}}"
+          bindtouchstart="onSortDragStart"
+          catchtouchmove="onSortDragMove"
+          bindtouchend="onSortDragEnd"
+          bindtouchcancel="onSortDragEnd"
+        >
+          <view class="drag-handle">☰</view>
+          <view class="detail-main">
+            <view class="detail-title {{item.isCompleted ? 'done-text' : ''}}">{{item.numberLabel}} {{item.title}}</view>
+            <view class="detail-meta">{{item.timeLabel}} · {{item.recurrenceLabel}}</view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view wx:if="{{showTaskForm}}" class="mask" catchtap="closeTaskForm"></view>
+  <view wx:if="{{showTaskForm}}" class="form-panel">
+    <view class="panel-header">
+      <view class="panel-title">{{form.id ? '编辑任务' : '新增任务'}}</view>
+      <button class="close" bindtap="closeTaskForm">×</button>
+    </view>
+
+    <view class="form">
+      <input class="input title-input" placeholder="任务名称" value="{{form.title}}" data-field="title" bindinput="onFormInput" />
+      <textarea class="textarea" placeholder="描述" value="{{form.description}}" data-field="description" bindinput="onFormInput"></textarea>
+
+      <view class="form-row">
+        <text>开始</text>
+        <picker mode="date" value="{{form.startDate}}" bindchange="onStartDateChange">
+          <view class="picker">{{form.startDate}}</view>
+        </picker>
+      </view>
+      <view class="form-row">
+        <text>结束</text>
+        <picker mode="date" value="{{form.endDate}}" bindchange="onEndDateChange">
+          <view class="picker">{{form.endDate}}</view>
+        </picker>
+      </view>
+      <view class="form-row">
+        <text>全天</text>
+        <switch checked="{{form.isAllDay}}" bindchange="onAllDayChange" />
+      </view>
+      <view wx:if="{{!form.isAllDay}}" class="time-row">
+        <picker mode="time" value="{{form.startTime}}" bindchange="onStartTimeChange">
+          <view class="picker">{{form.startTime}}</view>
+        </picker>
+        <picker mode="time" value="{{form.endTime}}" bindchange="onEndTimeChange">
+          <view class="picker">{{form.endTime}}</view>
+        </picker>
+      </view>
+      <view class="form-row">
+        <text>重复</text>
+        <picker range="{{recurrenceLabels}}" value="{{recurrenceIndex}}" bindchange="onRecurrenceChange">
+          <view class="picker">{{recurrenceLabels[recurrenceIndex]}}</view>
+        </picker>
+      </view>
+    </view>
+
+    <view class="form-actions">
+      <button class="secondary" bindtap="closeTaskForm">取消</button>
+      <button class="primary" bindtap="submitTask">保存</button>
+    </view>
+  </view>
+
+  <view wx:if="{{showAccountPanel}}" class="mask" catchtap="closeAccountPanel"></view>
+  <view wx:if="{{showAccountPanel}}" class="account-panel">
+    <view class="panel-header">
+      <view>
+        <view class="panel-title">{{accountRequired ? '登录/绑定账户' : '账户同步'}}</view>
+        <view class="panel-subtitle">使用邮箱账户后，Windows / Android / 微信小程序共用同一份数据</view>
+      </view>
+      <button wx:if="{{!accountRequired}}" class="close" bindtap="closeAccountPanel">×</button>
+    </view>
+    <view class="form">
+      <input
+        class="input"
+        placeholder="Supabase 邮箱"
+        value="{{accountEmail}}"
+        data-field="accountEmail"
+        bindinput="onAccountInput"
+      />
+      <input
+        class="input account-password"
+        password
+        placeholder="密码"
+        value="{{accountPassword}}"
+        data-field="accountPassword"
+        bindinput="onAccountInput"
+      />
+      <view class="account-help">登录或注册邮箱账户后，再次微信登录会自动进入这个账户。</view>
+    </view>
+    <view class="form-actions">
+      <button wx:if="{{!accountRequired}}" class="secondary" bindtap="closeAccountPanel">取消</button>
+      <button class="secondary" bindtap="submitAccountRegister">注册</button>
+      <button class="primary" bindtap="submitAccountLink">登录/绑定</button>
+    </view>
+  </view>
+</view>

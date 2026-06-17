@@ -1,0 +1,12 @@
+{
+  "pages": [
+    "pages/calendar/calendar"
+  ],
+  "window": {
+    "navigationBarTitleText": "Daily",
+    "navigationBarBackgroundColor": "#f7f9ff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7f9ff"
+  },
+  "sitemapLocation": "sitemap.json"
+}
