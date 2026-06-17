@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily_schedule_android_apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows
+        run: flutter build windows
+
+      - name: Copy EXE
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release-artifacts
+          Copy-Item build\windows\x64\runner\Release\daily_schedule.exe release-artifacts\daily_schedule.exe
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath release-artifacts\daily_schedule_windows.zip -Force
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily_schedule_windows
+          path: release-artifacts/*
+
+  release:
+    name: Create GitHub Release
+    needs:
+      - android
+      - windows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release-files
+          cp release-artifacts/daily_schedule_android_apk/app-release.apk release-files/daily_schedule_android.apk
+          cp release-artifacts/daily_schedule_windows/daily_schedule.exe release-files/daily_schedule_windows.exe
+          cp release-artifacts/daily_schedule_windows/daily_schedule_windows.zip release-files/daily_schedule_windows.zip
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-files/*
+          generate_release_notes: true
