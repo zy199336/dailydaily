@@ -29,6 +29,7 @@ class ScheduleRepository {
   });
 
   static const _storeFileName = 'daily_schedule_store_v1.json';
+  static const _authSessionKey = 'auth_session';
 
   final SupabaseClient client;
   final File storeFile;
@@ -60,12 +61,14 @@ class ScheduleRepository {
         deviceId = const Uuid().v4();
       }
     }
-    return ScheduleRepository._(
+    final repository = ScheduleRepository._(
       client: SupabaseClient(supabaseUrl, supabaseKey),
       storeFile: storeFile,
       deviceId: deviceId,
       ownerId: ownerId,
     );
+    await repository._restoreAuthSession();
+    return repository;
   }
 
   Future<List<ScheduleTask>> loadLocal() async {
@@ -107,15 +110,20 @@ class ScheduleRepository {
       email: email,
       password: password,
     );
+    await _saveAuthSession(response.session);
     return response.user?.id;
   }
 
   Future<String?> signUp(String email, String password) async {
     final response = await client.auth.signUp(email: email, password: password);
+    await _saveAuthSession(response.session);
     return response.user?.id;
   }
 
-  Future<void> signOut() => client.auth.signOut();
+  Future<void> signOut() async {
+    await client.auth.signOut();
+    await _saveAuthSession(null);
+  }
 
   Future<SyncResult> sync(
     List<ScheduleTask> localTasks, {
@@ -251,6 +259,30 @@ String _normalizeOwnerId(String value) {
 }
 
 extension on ScheduleRepository {
+  Future<void> _restoreAuthSession() async {
+    try {
+      final store = await _readStore();
+      final rawSession = store[ScheduleRepository._authSessionKey];
+      if (rawSession is! Map<String, dynamic>) return;
+      final response = await client.auth
+          .recoverSession(jsonEncode(rawSession))
+          .timeout(const Duration(seconds: 12));
+      await _saveAuthSession(response.session);
+    } catch (_) {
+      await _saveAuthSession(null);
+    }
+  }
+
+  Future<void> _saveAuthSession(Session? session) async {
+    final store = await _readStore();
+    final tasksByOwner = _tasksByOwnerMap(store);
+    await _writeStore(
+      tasksByOwner,
+      authSession: session?.toJson(),
+      clearAuthSession: session == null,
+    );
+  }
+
   Future<Map<String, dynamic>> _readStore() async {
     if (!await storeFile.exists()) return <String, dynamic>{};
     final raw = await storeFile.readAsString();
@@ -259,14 +291,22 @@ extension on ScheduleRepository {
   }
 
   Future<void> _writeStore(
-    Map<String, List<Map<String, dynamic>>> tasksByOwner,
-  ) {
+    Map<String, List<Map<String, dynamic>>> tasksByOwner, {
+    Map<String, dynamic>? authSession,
+    bool clearAuthSession = false,
+  }) async {
+    final existing = await _readStore();
+    final existingAuthSession = existing[ScheduleRepository._authSessionKey];
     final payload = jsonEncode({
       'device_id': deviceId,
       'owner_id': ownerId,
       'tasks_by_owner': tasksByOwner,
+      if (authSession != null)
+        ScheduleRepository._authSessionKey: authSession
+      else if (!clearAuthSession && existingAuthSession is Map<String, dynamic>)
+        ScheduleRepository._authSessionKey: existingAuthSession,
     });
-    return storeFile.writeAsString(payload);
+    await storeFile.writeAsString(payload);
   }
 
   Map<String, List<Map<String, dynamic>>> _tasksByOwnerMap(
