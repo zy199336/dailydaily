@@ -34,6 +34,7 @@ class ScheduleRepository {
   final SupabaseClient client;
   final File storeFile;
   final String deviceId;
+  StreamSubscription<AuthState>? _authStateSubscription;
   String ownerId;
 
   User? get currentUser => client.auth.currentUser;
@@ -68,6 +69,7 @@ class ScheduleRepository {
       ownerId: ownerId,
     );
     await repository._restoreAuthSession();
+    repository._watchAuthSession();
     return repository;
   }
 
@@ -259,6 +261,24 @@ String _normalizeOwnerId(String value) {
 }
 
 extension on ScheduleRepository {
+  void _watchAuthSession() {
+    _authStateSubscription?.cancel();
+    _authStateSubscription = client.auth.onAuthStateChange.listen((state) {
+      if (state.event == AuthChangeEvent.signedOut) {
+        unawaited(_saveAuthSession(null));
+        return;
+      }
+      if (state.session != null &&
+          (state.event == AuthChangeEvent.initialSession ||
+              state.event == AuthChangeEvent.signedIn ||
+              state.event == AuthChangeEvent.tokenRefreshed ||
+              state.event == AuthChangeEvent.userUpdated ||
+              state.event == AuthChangeEvent.passwordRecovery)) {
+        unawaited(_saveAuthSession(state.session));
+      }
+    });
+  }
+
   Future<void> _restoreAuthSession() async {
     try {
       final store = await _readStore();
