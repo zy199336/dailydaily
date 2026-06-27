@@ -244,11 +244,16 @@ fastify.delete('/tasks/:id', async (request, reply) => {
   const auth = await authenticate(request, reply);
   if (!auth || !supabase) return;
 
+  const taskId = String(request.params.id || '').trim();
+  if (!isUuid(taskId)) {
+    return { ok: true };
+  }
+
   const now = new Date().toISOString();
   let query = supabase
     .from(scheduleTable)
     .update({ deleted_at: now, updated_at: now })
-    .eq('id', request.params.id);
+    .eq('id', taskId);
   query = applyOwnerFilter(query, auth);
   const { error } = await query;
 
@@ -396,10 +401,17 @@ function applyOwnerFilter(query, auth) {
   return query.eq('owner_id', auth.ownerId);
 }
 
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    String(value || '').trim(),
+  );
+}
+
 function normalizeTask(task, auth) {
   if (!task || typeof task !== 'object') return null;
   const now = new Date().toISOString();
-  const id = task.id || crypto.randomUUID();
+  const incomingId = String(task.id || '').trim();
+  const id = isUuid(incomingId) ? incomingId : crypto.randomUUID();
   const title = String(task.title || '').trim();
   const startDate = task.start_date || task.startDate;
   const endDate = task.end_date || task.endDate || startDate;

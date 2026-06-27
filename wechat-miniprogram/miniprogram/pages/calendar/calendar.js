@@ -320,7 +320,7 @@ Page({
     try {
       const response = await api.saveTask(toApiTask(task));
       const savedTask = normalizeRemoteTask(response.task);
-      this.applyRemoteTask(savedTask, editVersion, '同步完成');
+      this.applyRemoteTask(savedTask, editVersion, '同步完成', task.id);
     } catch (error) {
       this.setData({ syncText: '本地已保存，云端同步失败' });
       wx.showToast({ title: error.message || '本地已保存，云端同步失败', icon: 'none' });
@@ -477,7 +477,12 @@ Page({
     );
     try {
       const response = await api.saveTask(toApiTask(nextTask));
-      this.applyRemoteTask(normalizeRemoteTask(response.task), editVersion, '同步完成');
+      this.applyRemoteTask(
+        normalizeRemoteTask(response.task),
+        editVersion,
+        '同步完成',
+        nextTask.id,
+      );
     } catch (error) {
       this.setData({ syncText: '本地已保存，云端同步失败' });
       wx.showToast({ title: error.message || '本地已保存，云端同步失败', icon: 'none' });
@@ -496,8 +501,16 @@ Page({
       const firstResponse = await api.saveTask(toApiTask(nextFirst));
       const secondResponse = await api.saveTask(toApiTask(nextSecond));
       if (this.localEditVersion !== editVersion) return;
-      let tasks = upsertTask(this.data.tasks, normalizeRemoteTask(firstResponse.task));
-      tasks = upsertTask(tasks, normalizeRemoteTask(secondResponse.task));
+      let tasks = mergeRemoteTask(
+        this.data.tasks,
+        normalizeRemoteTask(firstResponse.task),
+        nextFirst.id,
+      );
+      tasks = mergeRemoteTask(
+        tasks,
+        normalizeRemoteTask(secondResponse.task),
+        nextSecond.id,
+      );
       this.setData({ tasks, syncText: '同步完成' });
       this.rebuildCalendar();
     } catch (error) {
@@ -530,8 +543,12 @@ Page({
       );
       if (this.localEditVersion !== editVersion) return;
       let tasks = this.data.tasks;
-      responses.forEach((response) => {
-        tasks = upsertTask(tasks, normalizeRemoteTask(response.task));
+      responses.forEach((response, index) => {
+        tasks = mergeRemoteTask(
+          tasks,
+          normalizeRemoteTask(response.task),
+          reordered[index].id,
+        );
       });
       this.setData({
         tasks,
@@ -555,9 +572,9 @@ Page({
     return this.localEditVersion;
   },
 
-  applyRemoteTask(task, editVersion, syncText) {
+  applyRemoteTask(task, editVersion, syncText, localId) {
     if (this.localEditVersion !== editVersion) return;
-    const tasks = upsertTask(this.data.tasks, task);
+    const tasks = mergeRemoteTask(this.data.tasks, task, localId);
     this.setData({ tasks, syncText });
     this.rebuildCalendar();
   },
@@ -654,7 +671,11 @@ function emptyForm(date) {
 }
 
 function createLocalId() {
-  return `task-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
 }
 
 function normalizeRemoteTask(task) {
@@ -731,6 +752,14 @@ function upsertTask(tasks, task) {
   const next = tasks.slice();
   next[index] = task;
   return next;
+}
+
+function mergeRemoteTask(tasks, task, localId) {
+  const next =
+    localId && localId !== task.id
+      ? tasks.filter((item) => item.id !== localId)
+      : tasks;
+  return upsertTask(next, task);
 }
 
 function renumberTasksForDate(tasks, date, updatedAt) {
