@@ -17,6 +17,7 @@ function request(path, options = {}) {
       method: options.method || 'GET',
       data: options.data || {},
       header: headers,
+      timeout: options.timeout || 20000,
       success(res) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res.data);
@@ -24,7 +25,10 @@ function request(path, options = {}) {
         }
         reject(new Error(res.data?.error || `HTTP ${res.statusCode}`));
       },
-      fail: reject,
+      fail(error) {
+        const message = error?.errMsg || error?.message || 'request failed';
+        reject(new Error(`${path} 请求失败：${message}`));
+      },
     });
   });
 }

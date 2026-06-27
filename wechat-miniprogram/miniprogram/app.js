@@ -11,12 +11,14 @@ App({
   async ensureLogin() {
     if (this.globalData.token) return this.globalData.token;
 
-    const loginResult = await new Promise((resolve, reject) => {
+    const loginResult = await withTimeout(new Promise((resolve, reject) => {
       wx.login({
         success: resolve,
-        fail: reject,
+        fail(error) {
+          reject(new Error(`微信登录失败：${error?.errMsg || 'unknown'}`));
+        },
       });
-    });
+    }), 15000, '微信登录超时');
 
     if (!loginResult.code) {
       throw new Error('微信登录失败');
@@ -69,3 +71,11 @@ App({
     wx.removeStorageSync('daily_email');
   },
 });
+
+function withTimeout(promise, timeoutMs, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
