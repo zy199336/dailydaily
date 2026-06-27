@@ -11,7 +11,7 @@ import '../models/schedule_task.dart';
 const supabaseUrl = 'https://kawhxjhiqqjjinbxcoqm.supabase.co';
 const supabaseKey = 'sb_publishable_XUdjz7gv0_M8nvGp8s3iVQ_jigFlgE-';
 const scheduleTable = 'daily_schedule_tasks';
-const aliyunApiBaseUrl = 'http://8.130.81.36/daily-api';
+const aliyunApiBaseUrl = 'https://api.dailydaily.top';
 
 class SyncResult {
   const SyncResult({required this.success, required this.message});

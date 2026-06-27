@@ -1,4 +1,4 @@
-const BASE_URL = 'http://8.130.81.36/daily-api';
+const BASE_URL = 'https://api.dailydaily.top';
 
 function request(path, options = {}) {
   const app = getApp();

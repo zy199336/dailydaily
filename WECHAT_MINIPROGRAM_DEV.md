@@ -10,23 +10,15 @@ C:\Users\yzhen\Downloads\Daily\wechat-miniprogram
 
 在微信开发者工具中选择“导入项目”，目录选上面的 `wechat-miniprogram`，AppID 已写入 `project.config.json`。
 
-## 开发阶段请求地址
+## 请求地址
 
-当前小程序临时请求：
-
-```text
-http://8.130.81.36
-```
-
-备案未完成前，在微信开发者工具中勾选“不校验合法域名、web-view 域名、TLS 版本以及 HTTPS 证书”后调试。
-
-备案通过后，把 `miniprogram/utils/api.js` 里的 `BASE_URL` 改成：
+当前小程序请求：
 
 ```text
 https://api.dailydaily.top
 ```
 
-并在微信公众平台后台把 `https://api.dailydaily.top` 加到 request 合法域名。
+请在微信公众平台后台把 `https://api.dailydaily.top` 加到 request 合法域名。
 
 ## 后端接口
 
@@ -39,7 +31,7 @@ daily-api
 健康检查：
 
 ```text
-http://8.130.81.36/health
+https://api.dailydaily.top/health
 ```
 
 主要接口：
