@@ -361,7 +361,7 @@
   position: fixed;
   left: 24rpx;
   right: 24rpx;
-  bottom: 28rpx;
+  bottom: calc(28rpx + env(safe-area-inset-bottom));
   background: #fff;
   border-radius: 18rpx;
   box-shadow: 0 20rpx 60rpx rgba(31, 41, 55, 0.18);
@@ -587,6 +587,13 @@
   height: 84rpx;
   border-radius: 12rpx;
   font-size: 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  line-height: 1;
+  box-sizing: border-box;
 }
 
 .secondary {

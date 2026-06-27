@@ -12,6 +12,7 @@ const sortRowHeight = 118;
 Page({
   localEditVersion: 0,
   pendingSyncCount: 0,
+  syncStatusTimer: null,
 
   data: {
     title: '',
@@ -55,6 +56,11 @@ Page({
   async onPullDownRefresh() {
     await this.syncFromServer();
     wx.stopPullDownRefresh();
+  },
+
+  onUnload() {
+    if (this.syncStatusTimer) clearTimeout(this.syncStatusTimer);
+    this.syncStatusTimer = null;
   },
 
   async loginAndSync() {
@@ -580,6 +586,7 @@ Page({
     this.pendingSyncCount += 1;
     this.setData({ tasks, syncText });
     this.rebuildCalendar();
+    this.scheduleSyncStatusFallback(this.localEditVersion);
     return this.localEditVersion;
   },
 
@@ -596,6 +603,7 @@ Page({
 
   finishSyncSuccess(editVersion, syncText) {
     this.pendingSyncCount = Math.max(0, this.pendingSyncCount - 1);
+    this.clearSyncStatusFallbackIfIdle();
     if (
       editVersion === this.localEditVersion ||
       (this.pendingSyncCount === 0 && isSyncingText(this.data.syncText))
@@ -606,9 +614,31 @@ Page({
 
   finishSyncFailure(editVersion, syncText) {
     this.pendingSyncCount = Math.max(0, this.pendingSyncCount - 1);
+    this.clearSyncStatusFallbackIfIdle();
     if (editVersion === this.localEditVersion || this.pendingSyncCount === 0) {
       this.setData({ syncText });
     }
+  },
+
+  scheduleSyncStatusFallback(editVersion) {
+    if (this.syncStatusTimer) clearTimeout(this.syncStatusTimer);
+    this.syncStatusTimer = setTimeout(() => {
+      if (
+        editVersion === this.localEditVersion &&
+        this.pendingSyncCount > 0 &&
+        isSyncingText(this.data.syncText)
+      ) {
+        this.pendingSyncCount = 0;
+        this.syncStatusTimer = null;
+        this.setData({ syncText: '本地已保存' });
+      }
+    }, 8000);
+  },
+
+  clearSyncStatusFallbackIfIdle() {
+    if (this.pendingSyncCount > 0 || !this.syncStatusTimer) return;
+    clearTimeout(this.syncStatusTimer);
+    this.syncStatusTimer = null;
   },
 
   nextPriority(date) {
