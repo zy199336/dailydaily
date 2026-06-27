@@ -2,6 +2,7 @@ const BASE_URL = 'https://api.dailydaily.top';
 
 function request(path, options = {}) {
   const app = getApp();
+  const timeoutMs = options.timeout || 20000;
   const headers = {
     'content-type': 'application/json',
     ...(options.headers || {}),
@@ -12,22 +13,36 @@ function request(path, options = {}) {
   }
 
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(`${path} 请求超时`));
+    }, timeoutMs + 1000);
+
+    function settle(callback, value) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      callback(value);
+    }
+
     wx.request({
       url: `${BASE_URL}${path}`,
       method: options.method || 'GET',
       data: options.data || {},
       header: headers,
-      timeout: options.timeout || 20000,
+      timeout: timeoutMs,
       success(res) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(res.data);
+          settle(resolve, res.data);
           return;
         }
-        reject(new Error(res.data?.error || `HTTP ${res.statusCode}`));
+        settle(reject, new Error(res.data?.error || `HTTP ${res.statusCode}`));
       },
       fail(error) {
         const message = error?.errMsg || error?.message || 'request failed';
-        reject(new Error(`${path} 请求失败：${message}`));
+        settle(reject, new Error(`${path} 请求失败：${message}`));
       },
     });
   });

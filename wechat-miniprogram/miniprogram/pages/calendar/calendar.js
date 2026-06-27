@@ -11,6 +11,7 @@ const sortRowHeight = 118;
 
 Page({
   localEditVersion: 0,
+  pendingSyncCount: 0,
 
   data: {
     title: '',
@@ -322,7 +323,7 @@ Page({
       const savedTask = normalizeRemoteTask(response.task);
       this.applyRemoteTask(savedTask, editVersion, '同步完成', task.id);
     } catch (error) {
-      this.setData({ syncText: '本地已保存，云端同步失败' });
+      this.finishSyncFailure(editVersion, '本地已保存，云端同步失败');
       wx.showToast({ title: error.message || '本地已保存，云端同步失败', icon: 'none' });
     }
   },
@@ -347,15 +348,19 @@ Page({
       const responses = await Promise.all(
         changedTasks.map((item) => api.saveTask(toApiTask(item))),
       );
-      if (this.localEditVersion !== editVersion) return;
+      if (this.localEditVersion !== editVersion) {
+        this.finishSyncSuccess(editVersion, '同步完成');
+        return;
+      }
       let syncedTasks = this.data.tasks;
       responses.forEach((response) => {
         syncedTasks = upsertTask(syncedTasks, normalizeRemoteTask(response.task));
       });
-      this.setData({ tasks: syncedTasks, syncText: '同步完成' });
+      this.setData({ tasks: syncedTasks });
       this.rebuildCalendar();
+      this.finishSyncSuccess(editVersion, '同步完成');
     } catch (error) {
-      this.setData({ syncText: '本地已保存，云端同步失败' });
+      this.finishSyncFailure(editVersion, '本地已保存，云端同步失败');
       wx.showToast({ title: error.message || '本地已保存，云端同步失败', icon: 'none' });
     }
   },
@@ -455,11 +460,9 @@ Page({
         );
         try {
           await api.deleteTask(id);
-          if (this.localEditVersion === editVersion) {
-            this.setData({ syncText: '同步完成' });
-          }
+          this.finishSyncSuccess(editVersion, '同步完成');
         } catch (error) {
-          this.setData({ syncText: '本地已删除，云端同步失败' });
+          this.finishSyncFailure(editVersion, '本地已删除，云端同步失败');
           wx.showToast({ title: error.message || '本地已删除，云端同步失败', icon: 'none' });
         }
       },
@@ -484,7 +487,7 @@ Page({
         nextTask.id,
       );
     } catch (error) {
-      this.setData({ syncText: '本地已保存，云端同步失败' });
+      this.finishSyncFailure(editVersion, '本地已保存，云端同步失败');
       wx.showToast({ title: error.message || '本地已保存，云端同步失败', icon: 'none' });
     }
   },
@@ -500,7 +503,10 @@ Page({
     try {
       const firstResponse = await api.saveTask(toApiTask(nextFirst));
       const secondResponse = await api.saveTask(toApiTask(nextSecond));
-      if (this.localEditVersion !== editVersion) return;
+      if (this.localEditVersion !== editVersion) {
+        this.finishSyncSuccess(editVersion, '同步完成');
+        return;
+      }
       let tasks = mergeRemoteTask(
         this.data.tasks,
         normalizeRemoteTask(firstResponse.task),
@@ -511,10 +517,11 @@ Page({
         normalizeRemoteTask(secondResponse.task),
         nextSecond.id,
       );
-      this.setData({ tasks, syncText: '同步完成' });
+      this.setData({ tasks });
       this.rebuildCalendar();
+      this.finishSyncSuccess(editVersion, '同步完成');
     } catch (error) {
-      this.setData({ syncText: '本地排序已保存，云端同步失败' });
+      this.finishSyncFailure(editVersion, '本地排序已保存，云端同步失败');
       wx.showToast({ title: error.message || '本地排序已保存，云端同步失败', icon: 'none' });
     }
   },
@@ -541,7 +548,10 @@ Page({
       const responses = await Promise.all(
         reordered.map((task) => api.saveTask(toApiTask(task))),
       );
-      if (this.localEditVersion !== editVersion) return;
+      if (this.localEditVersion !== editVersion) {
+        this.finishSyncSuccess(editVersion, '同步完成');
+        return;
+      }
       let tasks = this.data.tasks;
       responses.forEach((response, index) => {
         tasks = mergeRemoteTask(
@@ -552,31 +562,53 @@ Page({
       });
       this.setData({
         tasks,
-        syncText: '同步完成',
         draggingTaskId: '',
         draggingIndex: -1,
         dragStartY: 0,
         sortDirty: false,
       });
       this.rebuildCalendar();
+      this.finishSyncSuccess(editVersion, '同步完成');
     } catch (error) {
-      this.setData({ syncText: '本地排序已保存，云端同步失败' });
+      this.finishSyncFailure(editVersion, '本地排序已保存，云端同步失败');
       wx.showToast({ title: error.message || '本地排序已保存，云端同步失败', icon: 'none' });
     }
   },
 
   applyLocalTasks(tasks, syncText) {
     this.localEditVersion += 1;
+    this.pendingSyncCount += 1;
     this.setData({ tasks, syncText });
     this.rebuildCalendar();
     return this.localEditVersion;
   },
 
   applyRemoteTask(task, editVersion, syncText, localId) {
-    if (this.localEditVersion !== editVersion) return;
+    if (this.localEditVersion !== editVersion) {
+      this.finishSyncSuccess(editVersion, syncText);
+      return;
+    }
     const tasks = mergeRemoteTask(this.data.tasks, task, localId);
-    this.setData({ tasks, syncText });
+    this.setData({ tasks });
     this.rebuildCalendar();
+    this.finishSyncSuccess(editVersion, syncText);
+  },
+
+  finishSyncSuccess(editVersion, syncText) {
+    this.pendingSyncCount = Math.max(0, this.pendingSyncCount - 1);
+    if (
+      editVersion === this.localEditVersion ||
+      (this.pendingSyncCount === 0 && isSyncingText(this.data.syncText))
+    ) {
+      this.setData({ syncText });
+    }
+  },
+
+  finishSyncFailure(editVersion, syncText) {
+    this.pendingSyncCount = Math.max(0, this.pendingSyncCount - 1);
+    if (editVersion === this.localEditVersion || this.pendingSyncCount === 0) {
+      this.setData({ syncText });
+    }
   },
 
   nextPriority(date) {
@@ -736,6 +768,11 @@ function occursOn(task, date) {
 
 function isMultiDay(task) {
   return task.startDate !== task.endDate;
+}
+
+function isSyncingText(value) {
+  const text = String(value || '');
+  return text.includes('正在同步') || text.includes('等待同步');
 }
 
 function renumber(tasks) {
