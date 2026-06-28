@@ -8,6 +8,7 @@ const recurrenceOptions = [
   { label: '每年重复', value: 'yearly' },
 ];
 const sortRowHeight = 118;
+const calendarPagePath = '/pages/calendar/calendar';
 
 Page({
   localEditVersion: 0,
@@ -42,12 +43,14 @@ Page({
     form: emptyForm(dateUtil.formatDate(new Date())),
   },
 
-  async onLoad() {
+  async onLoad(options = {}) {
     const today = dateUtil.formatDate(new Date());
+    const initialDate = normalizedDateOrDefault(options.date, today);
     this.setData({
-      currentDate: today,
-      selectedDate: today,
+      currentDate: initialDate,
+      selectedDate: initialDate,
     });
+    this.enableShareMenu();
     this.rebuildCalendar();
     await this.loginAndSync();
     this.requireAccountIfNeeded();
@@ -61,6 +64,30 @@ Page({
   onUnload() {
     if (this.syncStatusTimer) clearTimeout(this.syncStatusTimer);
     this.syncStatusTimer = null;
+  },
+
+  enableShareMenu() {
+    if (!wx.showShareMenu) return;
+    wx.showShareMenu({
+      withShareTicket: true,
+      menus: ['shareAppMessage', 'shareTimeline'],
+    });
+  },
+
+  onShareAppMessage() {
+    const date = this.shareDate();
+    return {
+      title: shareTitle(date),
+      path: `${calendarPagePath}?date=${encodeURIComponent(date)}`,
+    };
+  },
+
+  onShareTimeline() {
+    const date = this.shareDate();
+    return {
+      title: shareTitle(date),
+      query: `date=${encodeURIComponent(date)}`,
+    };
   },
 
   async loginAndSync() {
@@ -641,6 +668,10 @@ Page({
     this.syncStatusTimer = null;
   },
 
+  shareDate() {
+    return this.data.selectedDate || this.data.currentDate || dateUtil.formatDate(new Date());
+  },
+
   nextPriority(date) {
     const tasks = this.data.tasks.filter(
       (task) =>
@@ -803,6 +834,23 @@ function isMultiDay(task) {
 function isSyncingText(value) {
   const text = String(value || '');
   return text.includes('正在同步') || text.includes('等待同步');
+}
+
+function normalizedDateOrDefault(value, fallback) {
+  if (!isValidDate(value)) return fallback;
+  return dateUtil.formatDate(value);
+}
+
+function isValidDate(value) {
+  const text = String(value || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const date = dateUtil.toDate(text);
+  return !Number.isNaN(date.getTime()) && dateUtil.formatDate(date) === text;
+}
+
+function shareTitle(date) {
+  const day = normalizedDateOrDefault(date, dateUtil.formatDate(new Date()));
+  return `Daily日程 · ${day}`;
 }
 
 function renumber(tasks) {
